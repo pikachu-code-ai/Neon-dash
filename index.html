@@ -130,16 +130,36 @@
 
         const config = {
             baseSpeed: 550,
-            gravity: 4500, // Increased for a faster, snappier fall
-            jumpForce: -1350, // Increased to counter higher gravity
-            padJumpForce: -1650, // Scaled up
-            ringJumpForce: -1200, // Scaled up
+            gravity: 4500, // snappier fall
+            jumpForce: -1350,
+            padJumpForce: -1650, 
+            ringJumpForce: -1200, 
             shipThrust: -6000,
             playerSize: 36,
             groundHeight: 120
         };
 
-        // Config for generation pools (Crushers excluded from Medium+)
+        // Seeded PRNG Function (Mulberry32)
+        function mulberry32(a) {
+            return function() {
+                var t = a += 0x6D2B79F5;
+                t = Math.imul(t ^ t >>> 15, t | 1);
+                t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+                return ((t ^ t >>> 14) >>> 0) / 4294967296;
+            }
+        }
+        let rand = Math.random; // Will be overwritten with seeded PRNG on start
+
+        // Difficulty Seeds
+        const diffSeeds = {
+            easy: 101,
+            medium: 202,
+            hard: 303,
+            hardest: 404,
+            impossible: 505
+        };
+
+        // Config for generation pools (Crushers excluded entirely)
         const chunkPools = {
             easy: ['spawnSimpleBlocks', 'spawnSequenceSpikes', 'spawnSpikePit', 'spawnCeilingHazards'],
             medium: ['spawnSimpleBlocks', 'spawnMovingStairs', 'spawnSpikePit', 'spawnPadJump', 'spawnCeilingHazards', 'spawnSequenceSpikes'],
@@ -161,7 +181,7 @@
         let bestScores = JSON.parse(localStorage.getItem('neonDashScores')) || {
             easy: 0, medium: 0, hard: 0, hardest: 0, impossible: 0
         };
-        const targetScore = 1500;
+        const targetScore = 1500; // Target score is 1500
 
         function updateMenuBestScores() {
             document.getElementById('best-easy').innerText = `Best: ${bestScores.easy}`;
@@ -176,10 +196,8 @@
         let currentDiff = 'medium';
         let lastTime = 0;
         let distance = 0;
-        let bestDistance = 0;
         let speedMultiplier = 1.0;
         let globalTime = 0;
-        
         let groundY = 0;
         let shakeTime = 0;
         
@@ -194,7 +212,6 @@
         let trail = [];
         
         let nextSpawnDistance = 0;
-        let chunkIndex = 0;
 
         function resize() {
             canvas.width = window.innerWidth;
@@ -304,6 +321,7 @@
         }
 
         function spawnParticles(x, y, color, count, speedMod = 1) {
+            // Visual particles can use unseeded Math.random to not interfere with level gen sync
             for(let i=0; i<count; i++) {
                 particles.push({
                     x: x, y: y,
@@ -317,50 +335,50 @@
             }
         }
 
-        // --- Procedural Generation ---
+        // --- Procedural Generation (Seeded) ---
         function addObj(type, x, y, w, h, extra = {}) {
             obstacles.push({ type, x, y, w, h, passed: false, ...extra });
         }
 
-        function spawnSimpleBlocks(startX) {
+        function spawnSimpleBlocks(startX, rng) {
             const s = config.playerSize;
             let endX = startX;
-            const numBlocks = 2 + Math.floor(Math.random() * 3);
+            const numBlocks = 2 + Math.floor(rng() * 3);
             for(let i=0; i<numBlocks; i++) {
-                const hOffset = s * (1 + Math.random() * 1.5);
-                addObj('block', endX, groundY - hOffset, s*(1.5 + Math.random()), s);
-                endX += s * (4 + Math.random() * 2.5);
+                const hOffset = s * (1 + rng() * 1.5);
+                addObj('block', endX, groundY - hOffset, s*(1.5 + rng()), s);
+                endX += s * (4 + rng() * 2.5);
             }
             return endX - startX;
         }
 
-        function spawnSequenceSpikes(startX) {
+        function spawnSequenceSpikes(startX, rng) {
             const s = config.playerSize;
             let endX = startX;
-            const numSpikes = 2 + Math.floor(Math.random() * 3);
+            const numSpikes = 2 + Math.floor(rng() * 3);
             for(let i=0; i<numSpikes; i++) {
                 addObj('spike', endX, groundY - s, s, s);
-                endX += s * (4 + Math.random() * 2);
+                endX += s * (4 + rng() * 2);
             }
             return endX - startX;
         }
 
-        function spawnHardCombo(startX) {
+        function spawnHardCombo(startX, rng) {
             const s = config.playerSize;
-            const sawY = groundY - s * (3 + Math.random() * 2);
-            const ringY = groundY - s * (3.5 + Math.random() * 1.5);
+            const sawY = groundY - s * (3 + rng() * 2);
+            const ringY = groundY - s * (3.5 + rng() * 1.5);
             addObj('pad', startX, groundY - s/4, s, s/4);
             addObj('saw', startX + s*3, sawY, s*1.5, s*1.5);
             addObj('ring', startX + s*6, ringY, s*1.5, s*1.5);
             addObj('spike', startX + s*6, groundY - s, s, s);
-            addObj('block', startX + s*(9 + Math.random()*2), groundY - s*(1.5 + Math.random()), s*2, s);
+            addObj('block', startX + s*(9 + rng()*2), groundY - s*(1.5 + rng()), s*2, s);
             return s * 13;
         }
 
-        function spawnImpossibleTunnel(startX) {
+        function spawnImpossibleTunnel(startX, rng) {
             const s = config.playerSize;
-            const h1 = groundY - s * (2 + Math.random());
-            const h2 = groundY - s * (2.5 + Math.random() * 1.5);
+            const h1 = groundY - s * (2 + rng());
+            const h2 = groundY - s * (2.5 + rng() * 1.5);
             addObj('spike', startX, groundY - s, s, s);
             addObj('saw', startX + s*2, h1, s*1.5, s*1.5);
             addObj('spike', startX + s*4, groundY - s, s, s);
@@ -369,85 +387,85 @@
             return s * 11;
         }
 
-        function spawnSpikePit(startX) {
+        function spawnSpikePit(startX, rng) {
             const s = config.playerSize;
-            const numSpikes = 2 + Math.floor(Math.random() * 3);
+            const numSpikes = 2 + Math.floor(rng() * 3);
             for(let i=0; i<numSpikes; i++) {
                 addObj('spike', startX + s*i, groundY - s, s, s);
             }
-            addObj('block', startX + s*(numSpikes + 3 + Math.random()*2), groundY - s*2, s*2, s);
+            addObj('block', startX + s*(numSpikes + 3 + rng()*2), groundY - s*2, s*2, s);
             return s * (numSpikes + 6);
         }
 
-        function spawnMovingStairs(startX) {
+        function spawnMovingStairs(startX, rng) {
             const s = config.playerSize;
-            const mSpeed1 = 2 + Math.random() * 3;
-            const mSpeed2 = 2 + Math.random() * 3;
-            const mAmp = s * (0.8 + Math.random() * 0.7);
+            const mSpeed1 = 2 + rng() * 3;
+            const mSpeed2 = 2 + rng() * 3;
+            const mAmp = s * (0.8 + rng() * 0.7);
             
             addObj('block', startX, groundY - s*2, s*2, s, { movingY: true, moveOffset: 0, moveAmp: mAmp, moveSpeed: mSpeed1 });
-            addObj('block', startX + s*5, groundY - s*(3.5 + Math.random()), s*2, s, { movingY: true, moveOffset: Math.PI * Math.random(), moveAmp: mAmp, moveSpeed: mSpeed2 });
+            addObj('block', startX + s*5, groundY - s*(3.5 + rng()), s*2, s, { movingY: true, moveOffset: Math.PI * rng(), moveAmp: mAmp, moveSpeed: mSpeed2 });
             addObj('spike', startX + s*3, groundY - s, s, s);
             return s * 10;
         }
 
-        function spawnPadJump(startX) {
+        function spawnPadJump(startX, rng) {
             const s = config.playerSize;
-            let wallDist = 4 + Math.random() * 3;
-            let wallHeight = 3 + Math.random() * 2.5;
+            let wallDist = 4 + rng() * 3;
+            let wallHeight = 3 + rng() * 2.5;
             
             addObj('pad', startX, groundY - s/4, s, s/4);
             addObj('block', startX + s*wallDist, groundY - s*wallHeight, s, s*wallHeight);
             addObj('spike', startX + s*wallDist, groundY - s*(wallHeight+1), s, s);
-            addObj('block', startX + s*(wallDist + 3 + Math.random()*2), groundY - s*(1.5 + Math.random()), s*(3 + Math.random()*2), s*2);
+            addObj('block', startX + s*(wallDist + 3 + rng()*2), groundY - s*(1.5 + rng()), s*(3 + rng()*2), s*2);
             return s * (wallDist + 8);
         }
 
-        function spawnRingJump(startX) {
+        function spawnRingJump(startX, rng) {
             const s = config.playerSize;
-            const ringY = groundY - s * (3.5 + Math.random() * 2);
-            const pitSize = 3 + Math.floor(Math.random() * 3);
+            const ringY = groundY - s * (3.5 + rng() * 2);
+            const pitSize = 3 + Math.floor(rng() * 3);
             
-            addObj('block', startX, groundY - s*(1 + Math.random()), s*2, s);
+            addObj('block', startX, groundY - s*(1 + rng()), s*2, s);
             addObj('ring', startX + s*5, ringY, s*1.5, s*1.5);
             
             for(let i=0; i<pitSize; i++) {
                 addObj('spike', startX + s*(3+i), groundY - s, s, s);
             }
             
-            addObj('block', startX + s*(pitSize + 4 + Math.random()), groundY - s*2, s*2, s*2);
+            addObj('block', startX + s*(pitSize + 4 + rng()), groundY - s*2, s*2, s*2);
             return s * (pitSize + 7);
         }
 
-        function spawnSawTunnel(startX) {
+        function spawnSawTunnel(startX, rng) {
             const s = config.playerSize;
-            const s1y = groundY - s * (1.5 + Math.random() * 1.5);
-            const s2y = groundY - s * (2.5 + Math.random() * 1.5);
+            const s1y = groundY - s * (1.5 + rng() * 1.5);
+            const s2y = groundY - s * (2.5 + rng() * 1.5);
             
             addObj('saw', startX + s*3, s1y, s*1.5, s*1.5);
-            addObj('saw', startX + s*(6 + Math.random()*2), s2y, s*1.5, s*1.5);
-            if (Math.random() > 0.5) {
-                addObj('saw', startX + s*(9 + Math.random()*2), s1y, s*1.5, s*1.5);
+            addObj('saw', startX + s*(6 + rng()*2), s2y, s*1.5, s*1.5);
+            if (rng() > 0.5) {
+                addObj('saw', startX + s*(9 + rng()*2), s1y, s*1.5, s*1.5);
             }
             addObj('block', startX + s*6, groundY - s, s*2, s);
             return s * 14;
         }
 
-        function spawnShipSection(startX) {
+        function spawnShipSection(startX, rng) {
             const s = config.playerSize;
             addObj('portal-ship', startX, groundY - s*3, s, s*3);
             
-            let length = 4 + Math.floor(Math.random() * 4);
-            let phase = Math.random() * Math.PI * 2;
-            let amp = s * (1 + Math.random() * 1.5);
+            let length = 4 + Math.floor(rng() * 4);
+            let phase = rng() * Math.PI * 2;
+            let amp = s * (1 + rng() * 1.5);
             
             for(let i=1; i<=length; i++) {
                 let yOffset = Math.sin(i * 1.5 + phase) * amp;
                 addObj('block', startX + s*5*i, groundY - s*8 + yOffset, s*2, s*2); // Roof
                 addObj('block', startX + s*5*i, groundY - s*2 + yOffset, s*2, s*2); // Floor
                 
-                if (Math.random() > 0.4) {
-                    let sawOffset = (Math.random() > 0.5 ? -s*4 : -s*2); // bias towards top or bottom
+                if (rng() > 0.4) {
+                    let sawOffset = (rng() > 0.5 ? -s*4 : -s*2); // bias towards top or bottom
                     addObj('saw', startX + s*5*i + s, groundY + sawOffset + yOffset, s*1.2, s*1.2);
                 }
             }
@@ -456,69 +474,47 @@
             return s * 5 * (length + 2);
         }
 
-        function spawnGravitySection(startX) {
+        function spawnGravitySection(startX, rng) {
             const s = config.playerSize;
             addObj('portal-gravity-up', startX, groundY - s*3, s, s*3);
             
-            const ceil1 = s * (2 + Math.random());
-            const ceil2 = s * (3 + Math.random() * 2);
+            const ceil1 = s * (2 + rng());
             
-            addObj('block', startX + s*(3 + Math.random()*2), 0, s*3, s);
+            addObj('block', startX + s*(3 + rng()*2), 0, s*3, s);
             addObj('spike', startX + s*5, s, s, s, {upsideDown: true});
-            if (Math.random() > 0.5) addObj('spike', startX + s*6, s, s, s, {upsideDown: true});
+            if (rng() > 0.5) addObj('spike', startX + s*6, s, s, s, {upsideDown: true});
             
-            addObj('saw', startX + s*(9 + Math.random()*3), ceil1, s*1.5, s*1.5);
-            addObj('block', startX + s*(13 + Math.random()*2), 0, s*3, s*2);
+            addObj('saw', startX + s*(9 + rng()*3), ceil1, s*1.5, s*1.5);
+            addObj('block', startX + s*(13 + rng()*2), 0, s*3, s*2);
             
             addObj('portal-gravity-down', startX + s*18, groundY - s*3, s, s*3);
             return s * 21;
         }
 
-        function spawnCeilingHazards(startX) {
+        function spawnCeilingHazards(startX, rng) {
             const s = config.playerSize;
-            const gap = 1 + Math.random();
+            const gap = 1 + rng();
             addObj('block', startX, 0, s*4, s*2);
             addObj('spike', startX + s, s*2, s, s, {upsideDown: true});
-            addObj('spike', startX + s*(2 + Math.random()), s*2, s, s, {upsideDown: true});
+            addObj('spike', startX + s*(2 + rng()), s*2, s, s, {upsideDown: true});
 
             addObj('spike', startX + s*2, groundY - s, s, s);
 
-            addObj('saw', startX + s*(5 + gap), s*(1.5 + Math.random()), s*1.5, s*1.5);
-            addObj('block', startX + s*(5 + gap), groundY - s*(1.5 + Math.random()), s*2, s*2);
+            addObj('saw', startX + s*(5 + gap), s*(1.5 + rng()), s*1.5, s*1.5);
+            addObj('block', startX + s*(5 + gap), groundY - s*(1.5 + rng()), s*2, s*2);
 
             return s * 11;
         }
 
-        function spawnCrusherSection(startX) {
-            const s = config.playerSize;
-            const fSpeed1 = 900 + Math.random() * 500;
-            const fSpeed2 = 1200 + Math.random() * 600;
-            const trigDist = s * (9 + Math.random() * 4);
-            
-            addObj('block', startX, 0, s*3, s*3, {
-                crusher: true, triggerDist: trigDist, fallSpeed: fSpeed1, targetY: groundY - s*3, triggered: false
-            });
-            
-            if (Math.random() > 0.3) {
-                addObj('spike', startX + s*(3.5 + Math.random()), groundY - s, s, s);
-            }
-
-            addObj('block', startX + s*(7 + Math.random()*2), 0, s*(2 + Math.random()), s*5, {
-                crusher: true, triggerDist: trigDist - s*2, fallSpeed: fSpeed2, targetY: groundY - s*5, triggered: false
-            });
-
-            return s * 14;
-        }
-
-        function spawnDualHazards(startX) {
+        function spawnDualHazards(startX, rng) {
             const s = config.playerSize;
             addObj('spike', startX, 0, s, s, {upsideDown: true});
             addObj('spike', startX, groundY - s, s, s);
 
-            addObj('saw', startX + s*(2.5 + Math.random()), s*(0.8 + Math.random()), s*1.5, s*1.5);
-            addObj('block', startX + s*3, groundY - s*(1.5 + Math.random()), s*2, s*2);
+            addObj('saw', startX + s*(2.5 + rng()), s*(0.8 + rng()), s*1.5, s*1.5);
+            addObj('block', startX + s*3, groundY - s*(1.5 + rng()), s*2, s*2);
 
-            const endSpikeOff = s * (5.5 + Math.random() * 1.5);
+            const endSpikeOff = s * (5.5 + rng() * 1.5);
             addObj('spike', startX + endSpikeOff, 0, s, s, {upsideDown: true});
             addObj('spike', startX + endSpikeOff + s, 0, s, s, {upsideDown: true});
             addObj('pad', startX + endSpikeOff, groundY - s/4, s, s/4);
@@ -529,25 +525,26 @@
         function spawnChunk() {
             const settings = difficultySettings[currentDiff];
             const pool = settings.pool;
-            const chunkName = pool[Math.floor(Math.random() * pool.length)];
+            // Use the seeded PRNG to pick the chunk
+            const chunkName = pool[Math.floor(rand() * pool.length)];
             
             const startX = canvas.width + 100;
             let endOffset = 0;
             
-            if (chunkName === 'spawnSimpleBlocks') endOffset = spawnSimpleBlocks(startX);
-            else if (chunkName === 'spawnSpikePit') endOffset = spawnSpikePit(startX);
-            else if (chunkName === 'spawnMovingStairs') endOffset = spawnMovingStairs(startX);
-            else if (chunkName === 'spawnPadJump') endOffset = spawnPadJump(startX);
-            else if (chunkName === 'spawnRingJump') endOffset = spawnRingJump(startX);
-            else if (chunkName === 'spawnSawTunnel') endOffset = spawnSawTunnel(startX);
-            else if (chunkName === 'spawnShipSection') endOffset = spawnShipSection(startX);
-            else if (chunkName === 'spawnHardCombo') endOffset = spawnHardCombo(startX);
-            else if (chunkName === 'spawnImpossibleTunnel') endOffset = spawnImpossibleTunnel(startX);
-            else if (chunkName === 'spawnSequenceSpikes') endOffset = spawnSequenceSpikes(startX);
-            else if (chunkName === 'spawnGravitySection') endOffset = spawnGravitySection(startX);
-            else if (chunkName === 'spawnCeilingHazards') endOffset = spawnCeilingHazards(startX);
-            else if (chunkName === 'spawnCrusherSection') endOffset = spawnCrusherSection(startX);
-            else if (chunkName === 'spawnDualHazards') endOffset = spawnDualHazards(startX);
+            // Pass seeded PRNG into chunk generators
+            if (chunkName === 'spawnSimpleBlocks') endOffset = spawnSimpleBlocks(startX, rand);
+            else if (chunkName === 'spawnSpikePit') endOffset = spawnSpikePit(startX, rand);
+            else if (chunkName === 'spawnMovingStairs') endOffset = spawnMovingStairs(startX, rand);
+            else if (chunkName === 'spawnPadJump') endOffset = spawnPadJump(startX, rand);
+            else if (chunkName === 'spawnRingJump') endOffset = spawnRingJump(startX, rand);
+            else if (chunkName === 'spawnSawTunnel') endOffset = spawnSawTunnel(startX, rand);
+            else if (chunkName === 'spawnShipSection') endOffset = spawnShipSection(startX, rand);
+            else if (chunkName === 'spawnHardCombo') endOffset = spawnHardCombo(startX, rand);
+            else if (chunkName === 'spawnImpossibleTunnel') endOffset = spawnImpossibleTunnel(startX, rand);
+            else if (chunkName === 'spawnSequenceSpikes') endOffset = spawnSequenceSpikes(startX, rand);
+            else if (chunkName === 'spawnGravitySection') endOffset = spawnGravitySection(startX, rand);
+            else if (chunkName === 'spawnCeilingHazards') endOffset = spawnCeilingHazards(startX, rand);
+            else if (chunkName === 'spawnDualHazards') endOffset = spawnDualHazards(startX, rand);
             
             const gap = config.playerSize * 6 * settings.gapMult;
             nextSpawnDistance = distance + endOffset + gap;
@@ -558,6 +555,9 @@
         function startGame() {
             config.baseSpeed = difficultySettings[currentDiff].speed;
             
+            // Initialize Seeded PRNG for the chosen difficulty
+            rand = mulberry32(diffSeeds[currentDiff] || 1);
+
             resetPlayer();
             obstacles = [];
             particles = [];
@@ -683,7 +683,6 @@
                 if (player.mode === 'cube') {
                     // Check Ring Interactions
                     if (inputJustPressed && !player.isGrounded) {
-                        // Find nearby unused ring
                         for (let obs of obstacles) {
                             if (obs.type === 'ring' && !obs.used) {
                                 const cx = obs.x + obs.w/2;
@@ -692,19 +691,19 @@
                                 const py = player.y + player.size/2;
                                 const dist = Math.hypot(cx - px, cy - py);
                                 
-                                if (dist < obs.w * 1.5) { // Interaction radius
+                                if (dist < obs.w * 1.5) { 
                                     player.vy = config.ringJumpForce * player.gravityMod;
                                     obs.used = true;
                                     jumpedViaRing = true;
                                     spawnParticles(cx, cy, colors.yellow, 15, 0.5);
-                                    inputJustPressed = false; // Consume input
+                                    inputJustPressed = false; 
                                     break;
                                 }
                             }
                         }
                     }
 
-                    // Normal Jump (Continuous if held)
+                    // Normal Jump 
                     if (isInputHeld && player.isGrounded) {
                         player.vy = config.jumpForce * player.gravityMod;
                         player.isGrounded = false;
@@ -713,12 +712,12 @@
 
                     player.vy += config.gravity * player.gravityMod * dt;
                     if (!player.isGrounded && !jumpedViaRing) {
-                        player.rotation += 6 * dt * player.gravityMod; // Spin
+                        player.rotation += 6 * dt * player.gravityMod; 
                     }
                 } else if (player.mode === 'ship') {
                     if (isInputHeld) {
                         player.vy += config.shipThrust * player.gravityMod * dt;
-                        if (Math.random() < 0.5) {
+                        if (Math.random() < 0.5) { // Visual effects use normal random
                             spawnParticles(player.x, (player.gravityMod === 1 ? player.y + player.size : player.y), colors.yellow, 1, 0.2);
                         }
                     } else {
@@ -727,17 +726,15 @@
                     
                     player.vy = Math.max(-700, Math.min(player.vy, 700));
                     player.rotation = player.vy * 0.001 * player.gravityMod; 
-                    
-                    // Ceiling (Handled later in bound checks)
                 }
 
-                inputJustPressed = false; // Clear flag
+                inputJustPressed = false;
                 player.y += player.vy * dt;
                 player.isGrounded = false;
                 let landedOnBlock = false;
 
                 // Trail Update
-                if (globalTime * 60 % 2 < 1) { // Add trail every few frames
+                if (globalTime * 60 % 2 < 1) { 
                     trail.push({x: player.x, y: player.y, rot: player.rotation, gMod: player.gravityMod, life: 1.0});
                 }
                 for (let i = trail.length-1; i>=0; i--) {
@@ -752,18 +749,6 @@
 
                     if (obs.type === 'block' && obs.movingY) {
                         obs.currentY = obs.y + Math.sin(globalTime * obs.moveSpeed + obs.moveOffset) * obs.moveAmp;
-                    } else if (obs.type === 'block' && obs.crusher) {
-                        if (!obs.triggered && (obs.x - player.x) < obs.triggerDist) {
-                            obs.triggered = true;
-                        }
-                        if (obs.triggered && obs.y < obs.targetY) {
-                            obs.y += obs.fallSpeed * dt;
-                            if (obs.y > obs.targetY) {
-                                obs.y = obs.targetY;
-                                spawnParticles(obs.x + obs.w/2, obs.y + obs.h, colors.red, 10, 0.8);
-                            }
-                        }
-                        obs.currentY = obs.y;
                     } else {
                         obs.currentY = obs.y;
                     }
@@ -778,27 +763,24 @@
                     const py = player.y;
                     const ps = player.size;
 
-                    // Skip broad phase for circles (saws, rings) as their w/h is diameter
                     if (obs.type === 'saw') {
-                        const r = obs.w/2 - 4; // slight forgiveness radius
+                        const r = obs.w/2 - 4; 
                         if (circleIntersectRect(obs.x + obs.w/2, obs.currentY + obs.h/2, r, px, py, ps, ps)) {
                             gameOver();
                         }
                     } else if (obs.type === 'ring') {
-                        // Collision with the ring object itself does nothing, interaction is handled in player logic
+                        // Managed above
                     } else {
                         // Rectangular AABB Broad phase
                         if (px < obs.x + obs.w && px + ps > obs.x && py < obs.currentY + obs.h && py + ps > obs.currentY) {
                             
                             if (obs.type === 'spike') {
-                                // Triangle narrow phase
                                 const pad = 6;
                                 if (px + pad < obs.x + obs.w - pad && px + ps - pad > obs.x + pad &&
                                     py + pad < obs.currentY + obs.h && py + ps > obs.currentY + pad) {
                                     gameOver();
                                 }
                             } else if (obs.type === 'pad') {
-                                // Hitting pad bounces player
                                 player.vy = config.padJumpForce * player.gravityMod;
                                 player.isGrounded = false;
                                 player.y = player.gravityMod === 1 ? obs.currentY - ps : obs.currentY + obs.h;
@@ -830,10 +812,9 @@
                                         player.y = obs.currentY + obs.h;
                                         player.vy = 0;
                                     } else {
-                                        gameOver(); // Hit wall
+                                        gameOver(); 
                                     }
                                 } else {
-                                    // Inverted collision logic
                                     if (player.prevY >= obs.currentY + obs.h - 8 && player.vy <= 0) {
                                         player.y = obs.currentY + obs.h;
                                         player.vy = obs.movingY ? (Math.cos(globalTime * obs.moveSpeed + obs.moveOffset) * obs.moveAmp * obs.moveSpeed) : 0;
@@ -846,7 +827,7 @@
                                         player.y = obs.currentY - ps;
                                         player.vy = 0;
                                     } else {
-                                        gameOver(); // Hit wall
+                                        gameOver(); 
                                     }
                                 }
                             }
@@ -864,13 +845,11 @@
                             player.rotation = Math.round(player.rotation / (Math.PI/2)) * (Math.PI/2);
                         }
                     }
-                    // Ship ceiling check
                     if (player.mode === 'ship' && player.y < 0) {
                         player.y = 0;
                         player.vy = 0;
                     }
                 } else {
-                    // Inverted: ground is ceiling (y=0)
                     if (player.y <= 0 && !landedOnBlock) {
                         player.y = 0;
                         player.vy = 0;
@@ -879,7 +858,6 @@
                             player.rotation = Math.round(player.rotation / (Math.PI/2)) * (Math.PI/2);
                         }
                     }
-                    // Ship bounds check (inverted ceiling is floor)
                     if (player.mode === 'ship' && player.y + player.size > groundY) {
                         player.y = groundY - player.size;
                         player.vy = 0;
@@ -887,7 +865,6 @@
                 }
             }
 
-            // Particles
             for (let i = particles.length - 1; i >= 0; i--) {
                 let p = particles[i];
                 p.vy += config.gravity * 0.5 * dt;
@@ -901,20 +878,15 @@
         function draw() {
             ctx.save();
             
-            // Screen Shake
             if (shakeTime > 0) {
                 const mag = (shakeTime / 0.4) * 15;
                 ctx.translate((Math.random()-0.5)*mag, (Math.random()-0.5)*mag);
             }
 
-            // Background
             ctx.fillStyle = colors.bg;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Parallax Grids
             ctx.lineWidth = 1;
-            
-            // Back Grid (Slow)
             ctx.strokeStyle = 'rgba(176, 0, 255, 0.15)';
             const bgOffset = (distance * 0.2) % 100;
             ctx.beginPath();
@@ -922,14 +894,12 @@
             for(let y = groundY; y >= 0; y -= 100) { ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); }
             ctx.stroke();
 
-            // Front Grid (Fast, floor tracking)
             ctx.strokeStyle = 'rgba(0, 229, 255, 0.2)';
             const fgOffset = distance % 60;
             ctx.beginPath();
             for(let x = -fgOffset; x < canvas.width; x += 60) { ctx.moveTo(x, groundY); ctx.lineTo(x + 200, canvas.height); }
             ctx.stroke();
 
-            // Floor Line
             ctx.shadowBlur = 15;
             ctx.shadowColor = colors.cyan;
             ctx.strokeStyle = colors.cyan;
@@ -937,17 +907,15 @@
             ctx.beginPath(); ctx.moveTo(0, groundY); ctx.lineTo(canvas.width, groundY); ctx.stroke();
             
             ctx.shadowBlur = 0;
-            ctx.fillStyle = '#020106'; // Very dark floor
+            ctx.fillStyle = '#020106'; 
             ctx.fillRect(0, groundY, canvas.width, canvas.height - groundY);
 
-            // Draw Obstacles
             obstacles.forEach(obs => {
                 const drawY = obs.currentY !== undefined ? obs.currentY : obs.y;
 
                 if (obs.type === 'block') {
-                    const isCrusher = obs.crusher;
-                    const cColor = isCrusher ? colors.red : colors.purple;
-                    const bg = isCrusher ? 'rgba(255, 0, 60, 0.15)' : 'rgba(176, 0, 255, 0.1)';
+                    const cColor = colors.purple;
+                    const bg = 'rgba(176, 0, 255, 0.1)';
 
                     ctx.shadowBlur = 10;
                     ctx.shadowColor = cColor;
@@ -956,18 +924,8 @@
                     ctx.lineWidth = 2;
                     ctx.beginPath(); ctx.rect(obs.x, drawY, obs.w, obs.h); ctx.fill(); ctx.stroke();
                     
-                    // Detail lines
                     ctx.shadowBlur = 0;
                     ctx.beginPath(); ctx.moveTo(obs.x+4, drawY+4); ctx.lineTo(obs.x+obs.w-4, drawY+4); ctx.stroke();
-                    
-                    if (isCrusher) {
-                        ctx.fillStyle = colors.red;
-                        ctx.beginPath();
-                        ctx.moveTo(obs.x + obs.w/2 - 6, drawY + obs.h/2 - 6);
-                        ctx.lineTo(obs.x + obs.w/2 + 6, drawY + obs.h/2 - 6);
-                        ctx.lineTo(obs.x + obs.w/2, drawY + obs.h/2 + 8);
-                        ctx.fill();
-                    }
                 } 
                 else if (obs.type === 'spike') {
                     ctx.shadowBlur = 15;
@@ -986,7 +944,6 @@
                     ctx.closePath();
                     ctx.fill();
                     
-                    // Core highlight
                     ctx.shadowBlur = 0;
                     ctx.fillStyle = '#fff';
                     ctx.beginPath();
@@ -1017,7 +974,7 @@
                     
                     ctx.save();
                     ctx.translate(cx, cy);
-                    ctx.rotate(globalTime * -15); // Fast rotation
+                    ctx.rotate(globalTime * -15);
                     
                     ctx.shadowBlur = 15;
                     ctx.shadowColor = colors.red;
@@ -1027,7 +984,6 @@
                     
                     ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI*2); ctx.fill(); ctx.stroke();
                     
-                    // Teeth
                     ctx.beginPath();
                     for(let i=0; i<8; i++) {
                         ctx.moveTo(0, 0);
@@ -1035,7 +991,6 @@
                     }
                     ctx.stroke();
                     
-                    // Center pin
                     ctx.fillStyle = '#fff';
                     ctx.shadowBlur = 0;
                     ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI*2); ctx.fill();
@@ -1084,14 +1039,13 @@
                 }
             });
 
-            // Draw Player Trail
             if (state === 'playing') {
                 trail.forEach(t => {
                     ctx.save();
                     ctx.globalAlpha = t.life * 0.4;
                     ctx.translate(t.x + player.size/2, t.y + player.size/2);
                     ctx.rotate(t.rot);
-                    ctx.scale(1, t.gMod); // Apply trail gravity scale
+                    ctx.scale(1, t.gMod);
                     ctx.fillStyle = player.color;
                     if (player.mode === 'cube') {
                         ctx.fillRect(-player.size/2, -player.size/2, player.size, player.size);
@@ -1107,12 +1061,11 @@
                 ctx.globalAlpha = 1.0;
             }
 
-            // Draw Player
             if (state === 'playing') {
                 ctx.save();
                 ctx.translate(player.x + player.size / 2, player.y + player.size / 2);
                 ctx.rotate(player.rotation);
-                ctx.scale(1, player.gravityMod); // Flip player if inverted
+                ctx.scale(1, player.gravityMod); 
                 
                 ctx.shadowBlur = 20;
                 ctx.shadowColor = player.color;
@@ -1124,7 +1077,6 @@
                     ctx.fillRect(-player.size / 2, -player.size / 2, player.size, player.size);
                     ctx.strokeRect(-player.size / 2, -player.size / 2, player.size, player.size);
                     
-                    // Face
                     ctx.shadowBlur = 0;
                     ctx.fillStyle = '#000';
                     ctx.fillRect(-player.size/3, -player.size/4, player.size/5, player.size/5); 
@@ -1133,14 +1085,13 @@
                 } else {
                     ctx.beginPath();
                     ctx.moveTo(-player.size/2, -player.size/3); 
-                    ctx.lineTo(player.size/2 + 5, 0); // Pointy nose
+                    ctx.lineTo(player.size/2 + 5, 0); 
                     ctx.lineTo(-player.size/2, player.size/3); 
                     ctx.lineTo(-player.size/3, 0); 
                     ctx.closePath();
                     ctx.fill();
                     ctx.stroke();
                     
-                    // Cockpit
                     ctx.fillStyle = '#000';
                     ctx.shadowBlur = 0;
                     ctx.beginPath(); ctx.arc(0, 0, player.size/5, 0, Math.PI*2); ctx.fill();
@@ -1148,7 +1099,6 @@
                 ctx.restore();
             }
 
-            // Draw Particles
             if (particles.length > 0) {
                 particles.forEach(p => {
                     ctx.globalAlpha = Math.max(0, p.life);
@@ -1161,7 +1111,7 @@
                 ctx.shadowBlur = 0;
             }
 
-            ctx.restore(); // Restore from shake
+            ctx.restore(); 
         }
 
         // Init
