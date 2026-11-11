@@ -1,4 +1,4 @@
-# Neon-dash[readme_md.md](https://github.com/user-attachments/files/34668577/readme_md.md)
+# Neon-dash
 # Neon Dash: Overdrive 🚀
 
 Welcome to **Neon Dash: Overdrive**, a fast-paced, neon-infused platformer built entirely with HTML5 Canvas, JavaScript, and Tailwind CSS. Dodge spikes, fly ships, and reverse gravity in this procedurally generated arcade game!
