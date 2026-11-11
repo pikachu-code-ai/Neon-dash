@@ -209,7 +209,6 @@
         let player = {};
         let obstacles = [];
         let particles = [];
-        let trail = [];
         
         let nextSpawnDistance = 0;
 
@@ -280,7 +279,6 @@
             hud.classList.add('hidden');
             resetPlayer();
             obstacles = [];
-            trail = [];
             particles = [];
             distance = 0;
             draw();
@@ -295,7 +293,6 @@
             hud.classList.add('hidden');
             resetPlayer();
             obstacles = [];
-            trail = [];
             particles = [];
             distance = 0;
             draw();
@@ -313,7 +310,6 @@
                 color: colors.cyan,
                 gravityMod: 1
             };
-            trail = [];
         }
 
         function triggerShake(duration) {
@@ -735,16 +731,6 @@
                 player.isGrounded = false;
                 let landedOnBlock = false;
 
-                // Trail Update (Optimized history limit)
-                if (globalTime * 60 % 3 < 1) { 
-                    trail.push({x: player.x, y: player.y, rot: player.rotation, gMod: player.gravityMod, life: 1.0});
-                    if (trail.length > 8) trail.shift();
-                }
-                for (let i = trail.length-1; i>=0; i--) {
-                    trail[i].life -= dt * 3.5;
-                    if(trail[i].life <= 0) trail.splice(i, 1);
-                }
-
                 // Obstacle Update & Collision
                 for (let i = obstacles.length - 1; i >= 0; i--) {
                     let obs = obstacles[i];
@@ -1048,28 +1034,6 @@
                     ctx.globalAlpha = 1.0;
                 }
             });
-
-            if (state === 'playing') {
-                trail.forEach(t => {
-                    ctx.save();
-                    ctx.globalAlpha = t.life * 0.35;
-                    ctx.translate(t.x + player.size/2, t.y + player.size/2);
-                    ctx.rotate(t.rot);
-                    ctx.scale(1, t.gMod);
-                    ctx.fillStyle = player.color;
-                    if (player.mode === 'cube') {
-                        ctx.fillRect(-player.size/2, -player.size/2, player.size, player.size);
-                    } else {
-                        ctx.beginPath();
-                        ctx.moveTo(-player.size/2, -player.size/3);
-                        ctx.lineTo(player.size/2, 0);
-                        ctx.lineTo(-player.size/2, player.size/3);
-                        ctx.fill();
-                    }
-                    ctx.restore();
-                });
-                ctx.globalAlpha = 1.0;
-            }
 
             if (state === 'playing') {
                 ctx.save();
