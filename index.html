@@ -4,9 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Enhanced Neon Dash</title>
-    <!-- This line fixes the favicon 404 error -->
-    <link rel="icon" href="data:,">
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
         body, html {
             margin: 0;
             padding: 0;
@@ -24,11 +23,11 @@
         }
         .neon-text-main { text-shadow: 0 0 10px #0ff, 0 0 20px #0ff, 0 0 40px #0ff; }
         .neon-text-danger { text-shadow: 0 0 10px #f00, 0 0 20px #f00, 0 0 40px #f00; }
-        
         #uiLayer { transition: opacity 0.3s ease; }
     </style>
 </head>
 <body>
+    <!-- The rest of your game code (canvas, uiLayer, etc) starts here -->
 
     <canvas id="gameCanvas"></canvas>
 
